@@ -1,0 +1,99 @@
+- name: create a, sandox instance
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+     keypair: test
+     instance_type: t2.micro
+     image: ami-6e1a0117
+     region: us-west-2
+  tasks:
+     - name: creation d'un simple security group
+       ec2_group:
+          name: webservers
+          description: un nouveau security group
+          region: "{{ region }}"
+          rules:
+            - proto: tcp
+              from_port: 80
+              to_port: 80
+              cidr_ip: "0.0.0.0/0"
+            - proto: tcp
+              from_port: 22
+              to_port: 22
+              cidr_ip: "0.0.0.0/0"
+          rules_egress:
+            - proto: tcp
+              from_port: 80
+              to_port: 80
+              cidr_ip: 0.0.0.0/0
+       register: webservers_group
+
+#  tasks:
+     - name: launch instance
+       ec2:
+          key_name: test
+#          key_name: test
+          group_id:
+            - "{{ webservers_group.group_id }}"
+#            - "{{ elb.elb.security_group_ids | first }}"
+          instance_type: t2.micro
+          image: ami-6e1a0117
+          wait: true
+          region: "{{ region }}"
+          instance_tags:
+            group: jordan
+          exact_count: 2
+          count_tag:
+            group: jordan
+       register: ec2_instances
+
+
+#     - name: Store EC2 instance IPs to provision against
+#       add_host:
+#         hostname: "{{ item.public_ip }}"
+#         groupname: ec2_instance_ips
+#       with_items: "{{ ec2_instances.tagged_instances }}"
+
+     - name: attendre que le serveur est un DNS
+       wait_for: host={{ item.public_dns_name }} port=22 delay=10 timeout=180 state=started
+       with_items: ec2_instances.tagged_instances
+
+
+     - name: Ajoutons le serveur à un group
+       add_host: hostname={{ item.public_ip }} groupname=launched
+       with_items: ec2_instances.tagged_instances
+
+
+
+#  tasks:
+     - name: contruisons un load balancer
+       ec2_elb_lb:
+          name: monloadbalancer
+          state: present
+          region: "{{ region }}"
+          zones:
+            - "{{ region }}a"
+            - "{{ region }}b"
+#          instances:
+#            - i-0e3df96f36b19475b
+#            - i-0d8d4295db317a55c
+#          purge_instance_ids: true
+#          subnets:
+#             - subnet-aaac39cd
+          listeners:
+             - protocol: http
+               load_balancer_port: 80
+               instance_port: 80
+       register: elb
+       
+     - name: Ajouter les serveurs au load balancer
+       local_action: ec2_elb
+       args:
+          instance_id: "{{ item.id }}"
+          ec2_elbs: monloadbalancer
+          state: present
+          region: "{{ region }}"
+       with_items: ec2_instances.tagged_instances
+
+
