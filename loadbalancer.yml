@@ -1,4 +1,4 @@
-- name: create a, sandox instance
+- name: create a, sandox instance (testons)
   hosts: localhost
   connection: local
   gather_facts: false
