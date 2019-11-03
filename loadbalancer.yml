@@ -1,5 +1,5 @@
 - name: create a, sandox instance
-  hosts: localhost (testons)
+  hosts: localhost
   connection: local
   gather_facts: false
   vars:
